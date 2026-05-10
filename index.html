@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portfolio Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://alcdn.msauth.net/browser/2.38.4/js/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:     #080c14;
+      --bg2:    #0f1520;
+      --bg3:    #141d2b;
+      --border: #1e2a3a;
+      --gold:   #d4a843;
+      --green:  #22c55e;
+      --red:    #ef4444;
+      --text:   #f1f5f9;
+      --text2:  #94a3b8;
+      --text3:  #475569;
+      --mono:   'IBM Plex Mono', monospace;
+      --sans:   'Syne', sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+    /* ── Login ─────────────────────────────────── */
+    #login-screen {
+      position: fixed; inset: 0; display: flex; align-items: center;
+      justify-content: center; background: var(--bg); z-index: 100;
+    }
+    .login-card {
+      text-align: center; padding: 56px 48px; border: 1px solid var(--border);
+      background: var(--bg2); border-radius: 16px; max-width: 400px; width: 90%;
+    }
+    .login-logo { font-size: 36px; font-weight: 800; color: var(--gold); letter-spacing: -1px; margin-bottom: 6px; }
+    .login-sub  { color: var(--text2); font-size: 14px; margin-bottom: 36px; }
+    .btn-login  {
+      background: var(--gold); color: #000; border: none; padding: 14px 28px;
+      font-family: var(--sans); font-size: 15px; font-weight: 700; border-radius: 8px;
+      cursor: pointer; width: 100%; letter-spacing: 0.01em; transition: opacity .2s;
+    }
+    .btn-login:hover { opacity: .85; }
+    .login-note { font-size: 11px; color: var(--text3); margin-top: 14px; font-family: var(--mono); }
+
+    /* ── Header ────────────────────────────────── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 32px; border-bottom: 1px solid var(--border);
+      background: var(--bg); position: sticky; top: 0; z-index: 10;
+    }
+    .logo { font-size: 20px; font-weight: 800; color: var(--gold); letter-spacing: -0.5px; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .user-tag { font-size: 12px; color: var(--text3); font-family: var(--mono); }
+    .hbtn {
+      background: none; border: 1px solid var(--border); color: var(--text2);
+      padding: 6px 14px; border-radius: 6px; cursor: pointer;
+      font-family: var(--sans); font-size: 12px; transition: all .2s;
+    }
+    .hbtn:hover { border-color: var(--gold); color: var(--gold); }
+    .hbtn.danger:hover { border-color: var(--red); color: var(--red); }
+
+    /* ── Layout ────────────────────────────────── */
+    main { padding: 28px 32px; max-width: 1440px; margin: 0 auto; }
+
+    /* ── Stats row ─────────────────────────────── */
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+    .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; }
+    .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--text3); margin-bottom: 10px; }
+    .stat-value { font-family: var(--mono); font-size: 24px; font-weight: 500; }
+    .stat-sub   { font-family: var(--mono); font-size: 12px; margin-top: 5px; color: var(--text2); }
+    .pos { color: var(--green) !important; }
+    .neg { color: var(--red)   !important; }
+    .neu { color: var(--text2); }
+
+    /* ── Mid grid ──────────────────────────────── */
+    .mid-grid { display: grid; grid-template-columns: 320px 1fr; gap: 14px; margin-bottom: 20px; }
+
+    /* ── Cards ─────────────────────────────────── */
+    .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px; }
+    .card-title { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--text3); margin-bottom: 18px; }
+
+    /* ── Donut ─────────────────────────────────── */
+    .donut-wrap { position: relative; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+    .donut-center { position: absolute; text-align: center; pointer-events: none; }
+    .donut-big   { font-family: var(--mono); font-size: 17px; font-weight: 500; color: var(--text); }
+    .donut-small { font-size: 10px; color: var(--text3); margin-top: 3px; letter-spacing: .08em; }
+    .legend-item { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+    .leg-dot     { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+    .leg-lbl     { font-size: 12px; color: var(--text2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .leg-pct     { font-family: var(--mono); font-size: 12px; color: var(--text); }
+
+    /* ── Table ─────────────────────────────────── */
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--text3);
+      text-align: left; padding: 0 10px 12px; border-bottom: 1px solid var(--border);
+    }
+    thead th.r { text-align: right; }
+    tbody tr { border-bottom: 1px solid rgba(30,42,58,.6); transition: background .12s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--bg3); }
+    tbody td { padding: 11px 10px; font-size: 13px; }
+    .c-ticker { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--gold); }
+    .c-name   { color: var(--text); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .c-badge  { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--bg3); color: var(--text2); font-family: var(--mono); white-space: nowrap; }
+    .c-num    { font-family: var(--mono); font-size: 12px; text-align: right; color: var(--text); }
+    .fx-note  { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 12px; }
+
+    /* ── Bottom row ────────────────────────────── */
+    .bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    /* ── Misc ──────────────────────────────────── */
+    .meta-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .last-upd { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+    .error-box { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); border-radius: 8px; padding: 12px 16px; color: var(--red); font-size: 13px; margin-bottom: 16px; }
+    .loading   { display: flex; align-items: center; justify-content: center; min-height: 240px; color: var(--text2); font-size: 14px; gap: 10px; }
+    .spinner   { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #dashboard { display: none; }
+
+    /* ── Responsive ────────────────────────────── */
+    @media (max-width: 1000px) { .mid-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 800px)  { .stats-row { grid-template-columns: 1fr 1fr; } .bottom-row { grid-template-columns: 1fr; } main { padding: 18px 16px; } header { padding: 14px 16px; } }
+    @media (max-width: 480px)  { .stats-row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<!-- ═══ LOGIN ═══════════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">PORTL</div>
+    <div class="login-sub">Your investments, visualised</div>
+    <div id="login-err" class="error-box" style="display:none"></div>
+    <button class="btn-login" onclick="signIn()">Sign in with Microsoft</button>
+    <p class="login-note">Reads portfolio.xlsx from your OneDrive · Read-only</p>
+  </div>
+</div>
+
+<!-- ═══ DASHBOARD ════════════════════════════════════════════════════ -->
+<div id="dashboard">
+  <header>
+    <div class="logo">PORTL</div>
+    <div class="header-right">
+      <span class="user-tag" id="user-tag"></span>
+      <button class="hbtn" onclick="loadData()">↻ Refresh</button>
+      <button class="hbtn danger" onclick="signOut()">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="err-banner" class="error-box" style="display:none"></div>
+    <div id="loading" class="loading"><div class="spinner"></div>Loading portfolio…</div>
+
+    <div id="data-view" style="display:none">
+      <div class="meta-bar">
+        <span class="last-upd" id="last-upd"></span>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Total Portfolio Value</div>
+          <div class="stat-value" id="s-total">—</div>
+          <div class="stat-sub" id="s-holdings-count">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Gain / Loss</div>
+          <div class="stat-value" id="s-gl">—</div>
+          <div class="stat-sub" id="s-gl-pct">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Asset Classes</div>
+          <div class="stat-value" id="s-class-count">—</div>
+          <div class="stat-sub" id="s-class-list">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Best Performer</div>
+          <div class="stat-value" style="font-size:20px" id="s-best-name">—</div>
+          <div class="stat-sub pos" id="s-best-val">—</div>
+        </div>
+      </div>
+
+      <!-- Mid -->
+      <div class="mid-grid">
+        <div class="card">
+          <div class="card-title">Allocation by asset class</div>
+          <div class="donut-wrap">
+            <canvas id="donut-chart" width="220" height="220"></canvas>
+            <div class="donut-center">
+              <div class="donut-big" id="donut-ttl">—</div>
+              <div class="donut-small">AUD TOTAL</div>
+            </div>
+          </div>
+          <div id="alloc-legend"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Holdings</div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ticker</th>
+                  <th>Name</th>
+                  <th>Class</th>
+                  <th class="r">Units</th>
+                  <th class="r">Avg Cost</th>
+                  <th class="r">Price</th>
+                  <th class="r">Value (AUD)</th>
+                  <th class="r">P&amp;L (AUD)</th>
+                  <th class="r">P&amp;L %</th>
+                </tr>
+              </thead>
+              <tbody id="holdings-body"></tbody>
+            </table>
+          </div>
+          <div class="fx-note" id="fx-note"></div>
+        </div>
+      </div>
+
+      <!-- Bottom -->
+      <div class="bottom-row">
+        <div class="card">
+          <div class="card-title">Value by asset class (AUD)</div>
+          <canvas id="class-chart" height="180"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-title">Currency exposure (AUD equivalent)</div>
+          <canvas id="currency-chart" height="180"></canvas>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ── CONFIG ──────────────────────────────────────────────────────────
+   To update your GitHub Pages URL, change REDIRECT_URI below to match
+   exactly what you registered in Azure (e.g. https://yourname.github.io/portfolio/)
+   ─────────────────────────────────────────────────────────────────── */
+const REDIRECT_URI = window.location.origin + window.location.pathname.replace(/index\.html$/i, '');
+
+const MSAL_CONFIG = {
+  auth: {
+    clientId: "1b5292ae-1e64-4966-b8bd-9dab28fb5157",
+    authority: "https://login.microsoftonline.com/e8fee5a0-3f1b-4394-9e62-bbc3814b28c0",
+    redirectUri: REDIRECT_URI
+  },
+  cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false }
+};
+
+const FILE_NAME    = "portfolio.xlsx";
+const BASE_CCY     = "AUD";
+const GRAPH_SCOPES = ["User.Read", "Files.Read"];
+
+const PALETTE = ['#d4a843','#3b82f6','#22c55e','#f97316','#a855f7',
+                 '#14b8a6','#ec4899','#64748b','#eab308','#06b6d4'];
+
+let msalApp, fxRates = {}, chartInstances = {};
+
+/* ── MSAL ─────────────────────────────────────────────────────────── */
+async function initAuth() {
+  msalApp = new msal.PublicClientApplication(MSAL_CONFIG);
+  await msalApp.initialize();
+  const res = await msalApp.handleRedirectPromise();
+  if (res) msalApp.setActiveAccount(res.account);
+  const accounts = msalApp.getAllAccounts();
+  if (accounts.length > 0) {
+    msalApp.setActiveAccount(accounts[0]);
+    enterDashboard();
+    await loadData();
+  }
+}
+
+async function signIn() {
+  try {
+    const res = await msalApp.loginPopup({ scopes: GRAPH_SCOPES });
+    msalApp.setActiveAccount(res.account);
+    document.getElementById('login-err').style.display = 'none';
+    enterDashboard();
+    await loadData();
+  } catch(e) {
+    const el = document.getElementById('login-err');
+    el.textContent = 'Sign-in failed: ' + e.message;
+    el.style.display = 'block';
+  }
+}
+
+async function signOut() {
+  await msalApp.logoutPopup();
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+async function getToken() {
+  const req = { scopes: GRAPH_SCOPES };
+  try   { return (await msalApp.acquireTokenSilent(req)).accessToken; }
+  catch { return (await msalApp.acquireTokenPopup(req)).accessToken; }
+}
+
+function enterDashboard() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  const acct = msalApp.getActiveAccount();
+  if (acct) document.getElementById('user-tag').textContent = acct.name || acct.username;
+}
+
+/* ── GRAPH API ────────────────────────────────────────────────────── */
+async function graphFetch(path) {
+  const token = await getToken();
+  const res = await fetch('https://graph.microsoft.com/v1.0' + path, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  if (!res.ok) throw new Error(`Graph API error ${res.status} on ${path}: ${await res.text()}`);
+  return res.json();
+}
+
+async function readSheet(sheetName) {
+  try {
+    const encoded = encodeURIComponent(sheetName);
+    const data = await graphFetch(`/me/drive/root:/${FILE_NAME}:/workbook/worksheets/${encoded}/usedRange`);
+    if (!data.values || data.values.length < 2) return [];
+    const [headers, ...rows] = data.values;
+    const clean = s => (s || '').toString().trim();
+    return rows
+      .map(row => {
+        const obj = {};
+        headers.forEach((h, i) => { if (clean(h)) obj[clean(h)] = row[i] ?? ''; });
+        return obj;
+      })
+      .filter(r => Object.values(r).some(v => v !== ''));
+  } catch(e) {
+    console.warn(`Sheet "${sheetName}" skipped:`, e.message);
+    return [];
+  }
+}
+
+async function loadFxRates() {
+  try {
+    const data = await (await fetch('https://open.er-api.com/v6/latest/AUD')).json();
+    fxRates = { AUD: 1 };
+    for (const [ccy, rate] of Object.entries(data.rates || {})) {
+      fxRates[ccy] = rate > 0 ? 1 / rate : 1;
+    }
+    return true;
+  } catch {
+    fxRates = { AUD: 1, USD: 1.54, GBP: 1.96, EUR: 1.64, NZD: 0.91 };
+    return false;
+  }
+}
+
+/* ── HELPERS ──────────────────────────────────────────────────────── */
+const n  = v => parseFloat(v) || 0;
+const toAUD = (amt, ccy) => amt * (fxRates[(ccy||'AUD').toUpperCase()] ?? 1);
+const fmtAUD = (v, d=0) => 'A$' + v.toLocaleString('en-AU', {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmtPct = v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+const fmtNum = (v, d=4) => v > 0 ? v.toLocaleString('en-AU', {maximumFractionDigits:d}) : '—';
+
+/* ── CHARTS ───────────────────────────────────────────────────────── */
+Chart.defaults.color = '#475569';
+Chart.defaults.font.family = 'IBM Plex Mono';
+
+function destroyChart(id) {
+  if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
+}
+
+function renderDonut(labels, values, total) {
+  destroyChart('donut');
+  const ctx = document.getElementById('donut-chart').getContext('2d');
+  const display = total >= 1e6 ? 'A$'+(total/1e6).toFixed(2)+'M'
+                : total >= 1e3 ? 'A$'+(total/1e3).toFixed(1)+'k'
+                : fmtAUD(total);
+  document.getElementById('donut-ttl').textContent = display;
+
+  chartInstances['donut'] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: PALETTE.slice(0, labels.length),
+        borderWidth: 2,
+        borderColor: '#0f1520',
+        hoverOffset: 5
+      }]
+    },
+    options: {
+      cutout: '68%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: c => ' ' + c.label + ': ' + fmtAUD(c.raw) +
+              ' (' + (c.raw / values.reduce((a,b)=>a+b,0) * 100).toFixed(1) + '%)'
+          }
+        }
+      },
+      animation: { duration: 600 }
+    }
+  });
+
+  const totalV = values.reduce((a,b)=>a+b,0);
+  document.getElementById('alloc-legend').innerHTML = labels.map((l,i) => `
+    <div class="legend-item">
+      <div class="leg-dot" style="background:${PALETTE[i]}"></div>
+      <span class="leg-lbl">${l}</span>
+      <span class="leg-pct">${(values[i]/totalV*100).toFixed(1)}%</span>
+    </div>`).join('');
+}
+
+function renderBar(canvasId, labels, values) {
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  chartInstances[canvasId] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: PALETTE.slice(0, labels.length).map(c => c + 'bb'),
+        borderColor:     PALETTE.slice(0, labels.length),
+        borderWidth: 1,
+        borderRadius: 5
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ' ' + fmtAUD(c.raw) } }
+      },
+      scales: {
+        x: {
+          grid: { color: '#1e2a3a' },
+          ticks: {
+            color: '#475569', font: { family: 'IBM Plex Mono', size: 10 },
+            callback: v => v >= 1e6 ? 'A$'+(v/1e6).toFixed(1)+'M'
+                        : v >= 1e3 ? 'A$'+(v/1e3).toFixed(0)+'k'
+                        : 'A$'+v
+          }
+        },
+        y: { grid: { display: false }, ticks: { color: '#94a3b8', font: { family: 'IBM Plex Mono', size: 11 } } }
+      },
+      animation: { duration: 500 }
+    }
+  });
+}
+
+/* ── MAIN DATA LOAD ───────────────────────────────────────────────── */
+async function loadData() {
+  setLoading(true);
+  hideErr();
+
+  try {
+    const [fxOk, holdingsRaw, otherRaw] = await Promise.all([
+      loadFxRates(),
+      readSheet('Holdings'),
+      readSheet('Other Assets')
+    ]);
+
+    if (holdingsRaw.length === 0 && otherRaw.length === 0) {
+      throw new Error(
+        'No data found in portfolio.xlsx. ' +
+        'Make sure the file exists in your OneDrive root and has a "Holdings" sheet with data.'
+      );
+    }
+
+    /* Process listed holdings */
+    const holdings = holdingsRaw.map(h => {
+      const units     = n(h['Units'] ?? h['Units/Shares']);
+      const avgCost   = n(h['Avg Buy Price'] ?? h['Avg Cost'] ?? h['Average Cost']);
+      const curPrice  = n(h['Current Price'] ?? h['Price']);
+      const ccy       = ((h['Currency'] || 'AUD') + '').toUpperCase();
+      const valLocal  = units * curPrice;
+      const costLocal = units * avgCost;
+      const valAUD    = toAUD(valLocal, ccy);
+      const costAUD   = toAUD(costLocal, ccy);
+      const pnlAUD    = valAUD - costAUD;
+      const pnlPct    = costAUD > 0 ? pnlAUD / costAUD * 100 : 0;
+      return {
+        ticker:     ((h['Ticker'] || '') + '').toUpperCase(),
+        name:       (h['Asset Name'] || h['Name'] || '') + '',
+        assetClass: (h['Asset Class'] || 'Unknown') + '',
+        sector:     (h['Sector'] || '') + '',
+        ccy, units, avgCost, curPrice,
+        valLocal, costLocal, valAUD, costAUD, pnlAUD, pnlPct
+      };
+    }).filter(h => h.ticker);
+
+    /* Process other assets */
+    const others = otherRaw.map(a => {
+      const val = n(a['Current Value'] ?? a['Value']);
+      const ccy = ((a['Currency'] || 'AUD') + '').toUpperCase();
+      return {
+        ticker: '—',
+        name:       (a['Asset Name'] || a['Name'] || '') + '',
+        assetClass: (a['Asset Class'] || 'Other') + '',
+        sector: '', ccy,
+        units: 0, avgCost: 0, curPrice: 0,
+        valLocal: val, costLocal: 0,
+        valAUD: toAUD(val, ccy), costAUD: 0, pnlAUD: 0, pnlPct: 0
+      };
+    }).filter(a => a.name);
+
+    const all      = [...holdings, ...others];
+    const totalAUD = all.reduce((s, h) => s + h.valAUD, 0);
+    const totalCost = holdings.reduce((s, h) => s + h.costAUD, 0);
+    const totalPnL  = holdings.reduce((s, h) => s + h.pnlAUD, 0);
+    const totalPct  = totalCost > 0 ? totalPnL / totalCost * 100 : 0;
+    const best      = holdings.reduce((b, h) => h.pnlPct > (b?.pnlPct ?? -Infinity) ? h : b, null);
+
+    /* ── Stat cards ── */
+    document.getElementById('s-total').textContent          = fmtAUD(totalAUD);
+    document.getElementById('s-holdings-count').textContent = holdings.length + ' listed · ' + others.length + ' other';
+
+    const glEl  = document.getElementById('s-gl');
+    const glPEl = document.getElementById('s-gl-pct');
+    glEl.textContent  = fmtAUD(totalPnL);
+    glEl.className    = 'stat-value ' + (totalPnL >= 0 ? 'pos' : 'neg');
+    glPEl.textContent = fmtPct(totalPct);
+    glPEl.className   = 'stat-sub ' + (totalPct >= 0 ? 'pos' : 'neg');
+
+    const classes = [...new Set(all.map(h => h.assetClass).filter(Boolean))];
+    document.getElementById('s-class-count').textContent = classes.length;
+    document.getElementById('s-class-list').textContent  = classes.join(' · ');
+
+    if (best) {
+      document.getElementById('s-best-name').textContent = best.name.length > 18 ? best.ticker : best.name;
+      document.getElementById('s-best-val').textContent  = fmtPct(best.pnlPct) + '  ·  ' + fmtAUD(best.pnlAUD);
+    }
+
+    /* ── Holdings table ── */
+    const sorted = [...all].sort((a, b) => b.valAUD - a.valAUD);
+    document.getElementById('holdings-body').innerHTML = sorted.map(h => `
+      <tr>
+        <td class="c-ticker">${h.ticker}</td>
+        <td class="c-name"  title="${h.name}">${h.name}</td>
+        <td><span class="c-badge">${h.assetClass}</span></td>
+        <td class="c-num">${fmtNum(h.units)}</td>
+        <td class="c-num">${h.avgCost  > 0 ? h.ccy + ' ' + h.avgCost.toFixed(2)  : '—'}</td>
+        <td class="c-num">${h.curPrice > 0 ? h.ccy + ' ' + h.curPrice.toFixed(2) : '—'}</td>
+        <td class="c-num">${fmtAUD(h.valAUD)}</td>
+        <td class="c-num ${h.pnlAUD >= 0 ? 'pos' : 'neg'}">${h.pnlAUD !== 0 ? fmtAUD(h.pnlAUD) : '—'}</td>
+        <td class="c-num ${h.pnlPct >= 0 ? 'pos' : 'neg'}">${h.pnlPct !== 0 ? fmtPct(h.pnlPct) : '—'}</td>
+      </tr>`).join('');
+
+    document.getElementById('fx-note').textContent = fxOk
+      ? 'Live FX rates via open.er-api.com  ·  Base currency: AUD'
+      : 'Live FX unavailable — using estimated rates. Accuracy may vary for non-AUD holdings.';
+
+    /* ── Charts ── */
+    const classMap = {};
+    all.forEach(h => { classMap[h.assetClass] = (classMap[h.assetClass] || 0) + h.valAUD; });
+    const classKeys = Object.keys(classMap).sort((a,b) => classMap[b] - classMap[a]);
+    renderDonut(classKeys, classKeys.map(k => classMap[k]), totalAUD);
+    renderBar('class-chart', classKeys.slice(0,8), classKeys.slice(0,8).map(k => classMap[k]));
+
+    const ccyMap = {};
+    all.forEach(h => { ccyMap[h.ccy] = (ccyMap[h.ccy] || 0) + h.valAUD; });
+    const ccyKeys = Object.keys(ccyMap).sort((a,b) => ccyMap[b] - ccyMap[a]);
+    renderBar('currency-chart', ccyKeys, ccyKeys.map(k => ccyMap[k]));
+
+    document.getElementById('last-upd').textContent =
+      'Last loaded: ' + new Date().toLocaleString('en-AU', { dateStyle:'medium', timeStyle:'short' });
+
+    setLoading(false);
+    document.getElementById('data-view').style.display = 'block';
+
+  } catch(e) {
+    setLoading(false);
+    showErr(e.message);
+    console.error(e);
+  }
+}
+
+function setLoading(on) {
+  document.getElementById('loading').style.display = on ? 'flex' : 'none';
+  if (on) document.getElementById('data-view').style.display = 'none';
+}
+function showErr(msg) {
+  const el = document.getElementById('err-banner');
+  el.textContent = '⚠  ' + msg;
+  el.style.display = 'block';
+}
+function hideErr() {
+  document.getElementById('err-banner').style.display = 'none';
+}
+
+/* ── BOOT ─────────────────────────────────────────────────────────── */
+initAuth().catch(e => {
+  const el = document.getElementById('login-err');
+  el.textContent = 'Initialisation error: ' + e.message;
+  el.style.display = 'block';
+});
+</script>
+</body>
+</html>
