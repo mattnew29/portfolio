@@ -6,7 +6,7 @@
   <title>Portfolio Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-  <script src="https://alcdn.msauth.net/browser/2.38.4/js/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
@@ -262,11 +262,22 @@ const GRAPH_SCOPES = ["User.Read", "Files.Read"];
 const PALETTE = ['#d4a843','#3b82f6','#22c55e','#f97316','#a855f7',
                  '#14b8a6','#ec4899','#64748b','#eab308','#06b6d4'];
 
-let msalApp, fxRates = {}, chartInstances = {};
+let fxRates = {}, chartInstances = {};
 
-/* ── MSAL ─────────────────────────────────────────────────────────── */
-async function initAuth() {
+/* ── MSAL — instantiated at top level so it exists before any click ── */
+let msalApp;
+try {
   msalApp = new msal.PublicClientApplication(MSAL_CONFIG);
+} catch(e) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('login-err');
+    el.textContent = 'Failed to load Microsoft auth library. Please hard-refresh (Ctrl+Shift+R / Cmd+Shift+R).';
+    el.style.display = 'block';
+  });
+}
+
+async function initAuth() {
+  if (!msalApp) return;
   await msalApp.initialize();
   const res = await msalApp.handleRedirectPromise();
   if (res) msalApp.setActiveAccount(res.account);
@@ -279,6 +290,12 @@ async function initAuth() {
 }
 
 async function signIn() {
+  if (!msalApp) {
+    const el = document.getElementById('login-err');
+    el.textContent = 'Auth library not ready — please hard-refresh the page (Ctrl+Shift+R) and try again.';
+    el.style.display = 'block';
+    return;
+  }
   try {
     const res = await msalApp.loginPopup({ scopes: GRAPH_SCOPES });
     msalApp.setActiveAccount(res.account);
